@@ -26,6 +26,7 @@ import (
 	"gett/internal/send"
 	"gett/internal/term"
 	"gett/internal/torrentdl"
+	"gett/internal/transfer"
 
 	"github.com/spf13/cobra"
 )
@@ -73,6 +74,18 @@ FTP
   gett ftp ls ftp://host/pub/                               list a folder
   gett ftp rm ftp://host/old/2019/                          delete a folder and its contents
 
+Transfer (experimental)
+  gett transfer photos/                                     share a folder on the local network, Ctrl-C ends it
+  gett transfer photos/ videos/ report.pdf                  share several
+  gett transfer photos/ tiger                               with a password
+  gett transfer                                             list what is shared, numbered
+  gett transfer tiger                                       also the shares that password unlocks
+  gett transfer ls 1.2                                      list inside an item
+  gett transfer 1 keep/                                     pull item 1 into keep/
+  gett transfer 1.3 2.1 3                                   several items, into the current folder
+  gett transfer 2.1 | sha256sum                             a file streams to stdout
+  gett transfer 1.4 extract                                 unpack on arrival; also scan, sandbox
+
 Request
   gett send https://api.example.com/users                   GET
   gett send https://api.example.com/users POST '{"a":1}'    JSON body
@@ -117,6 +130,7 @@ Defaults, nothing to set
   proxy          HTTP_PROXY / HTTPS_PROXY / NO_PROXY
   TLS            verified; ftp:// uses TLS when offered, ftps:// always
   ftp            up to 8 connections, resumes, skips files already there
+  transfer       local network only, up to 16 connections, resumes, never overwrites
   extract        every core for zip, never overwrites, archive kept
   sandbox        ubuntu, 1 GiB, 2 cpus, internet yes, your machine no
   net            ping 4 times, trace 30 hops, 3s to connect
@@ -147,6 +161,7 @@ func main() {
 	root.AddCommand(
 		&cobra.Command{Use: "ftp upload URL FILE|DIR | ls URL | rm URL [...]", Args: cobra.MinimumNArgs(1), DisableFlagsInUseLine: true, RunE: runFTP},
 		&cobra.Command{Use: "extract FILE|URL [DIR] [...]", Args: cobra.MinimumNArgs(1), DisableFlagsInUseLine: true, RunE: runExtract},
+		&cobra.Command{Use: "transfer [PATH...] [PASSWORD] | [NUMBER...] [DIR] | ls NUMBER [...]", Args: cobra.ArbitraryArgs, DisableFlagsInUseLine: true, RunE: runTransfer},
 		&cobra.Command{Use: "sandbox [FILE|DIR|URL] | rm NAME... | reset", Args: cobra.ArbitraryArgs, DisableFlagsInUseLine: true, RunE: runSandbox},
 		&cobra.Command{Use: "net ip | dns NAME | ping HOST | trace HOST | port HOST PORT | tls HOST | whois NAME | speed", Args: cobra.MinimumNArgs(1), DisableFlagsInUseLine: true, RunE: runNet},
 		&cobra.Command{Use: "coin NAME ADDRESS|TXHASH [...]", Args: cobra.ArbitraryArgs, DisableFlagsInUseLine: true, RunE: runCoin},
@@ -406,6 +421,55 @@ func runCoin(cmd *cobra.Command, a []string) error {
 		return err
 	}
 	return coin.Run(ctx, a[0], a[1], client, o.Headers)
+}
+
+// runTransfer handles "gett transfer": share paths, list what is shared on
+// the local network, list inside an item, or pull items by number.
+func runTransfer(cmd *cobra.Command, a []string) error {
+	ctx, o, err := setup(cmd, args.Transfer, a)
+	if err != nil {
+		return err
+	}
+	switch {
+	case o.Ls:
+		if len(o.Items) != 1 || len(o.Paths) > 0 {
+			return &errs.Usage{Msg: "gett transfer ls NUMBER"}
+		}
+		return transfer.Ls(ctx, o.Items[0], os.Stdout)
+	case len(o.Items) > 0:
+		if len(o.Paths) > 1 {
+			return &errs.Usage{Msg: fmt.Sprintf("two destinations given: %q and %q", o.Paths[0], o.Paths[1])}
+		}
+		dest := ""
+		if len(o.Paths) == 1 {
+			dest = o.Paths[0]
+		}
+		saved, err := transfer.Pull(ctx, o.Items, dest, o.Password)
+		if err != nil || !(o.Sandbox || o.Scan || o.Extract) {
+			return err
+		}
+		client, err := httpx.NewClient(httpx.Config{Retries: true})
+		if err != nil {
+			return err
+		}
+		for _, s := range saved {
+			if o.Sandbox || o.Scan {
+				err = box(ctx, s, o, client)
+			} else {
+				err = unpack(ctx, s, o.ExtractTo)
+			}
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	case len(o.Paths) > 0:
+		if o.Sandbox || o.Scan || o.Extract {
+			return &errs.Usage{Msg: "scan, sandbox and extract apply to a pull"}
+		}
+		return transfer.Share(ctx, o.Paths, o.Password)
+	}
+	return transfer.List(ctx, o.Password, os.Stdout)
 }
 
 func isFTP(s string) bool {

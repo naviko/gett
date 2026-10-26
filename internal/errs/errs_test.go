@@ -33,6 +33,7 @@ func TestCodes(t *testing.T) {
 		{&textproto.Error{Code: 550, Msg: "no"}, 9},
 		{&Resumable{context.Canceled}, 130},
 		{fmt.Errorf("wrapped: %w", &Resumable{&Write{errors.New("x")}}), 23},
+		{&Peer{"laptop", "192.168.1.20:41234", context.DeadlineExceeded}, 7},
 	}
 	for _, c := range cases {
 		if got := Code(c.err); got != c.code {
@@ -45,6 +46,13 @@ func TestCodes(t *testing.T) {
 	}
 	if m := Message(&Resumable{context.Canceled}); m != "interrupted. Run the same command again to resume" {
 		t.Errorf("resumable message = %q", m)
+	}
+	peer := &Peer{"laptop", "192.168.1.20:41234", syscall.ECONNREFUSED}
+	if m := Message(&Resumable{peer}); m != "could not connect to laptop (192.168.1.20:41234). Run the same command again to resume" {
+		t.Errorf("peer message = %q", m)
+	}
+	if !CanResume(peer) {
+		t.Error("a peer that refuses connections is worth retrying")
 	}
 }
 

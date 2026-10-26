@@ -68,3 +68,53 @@ func TestShapes(t *testing.T) {
 		t.Fatal("bare number is not a timeout")
 	}
 }
+
+func TestTransferWords(t *testing.T) {
+	dir := t.TempDir()
+	photos := filepath.Join(dir, "photos")
+	os.Mkdir(photos, 0o755)
+	report := filepath.Join(dir, "report.pdf")
+	os.WriteFile(report, []byte("%PDF"), 0o644)
+
+	o, err := Parse(Transfer, []string{photos, report, "tiger", "verbose", "30s"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(o.Paths) != 2 || o.Paths[0] != photos || o.Paths[1] != report || o.Password != "tiger" || !o.Verbose || o.Timeout != 30*time.Second {
+		t.Fatalf("share parse: %+v", o)
+	}
+
+	o, err = Parse(Transfer, []string{"1", "2.3", "1.5", "keep/"})
+	if err != nil || len(o.Items) != 3 || o.Items[2] != "1.5" || len(o.Paths) != 1 || o.Paths[0] != "keep/" || o.Password != "" {
+		t.Fatalf("pull parse: %+v %v", o, err)
+	}
+
+	o, err = Parse(Transfer, []string{"ls", "1.2"})
+	if err != nil || !o.Ls || len(o.Items) != 1 || o.Items[0] != "1.2" {
+		t.Fatalf("ls parse: %+v %v", o, err)
+	}
+
+	o, err = Parse(Transfer, []string{"photoz"})
+	if err != nil || o.Password != "photoz" || len(o.Paths) != 0 {
+		t.Fatalf("a word that is not a path is a password: %+v %v", o, err)
+	}
+	o, err = Parse(Transfer, []string{"photoz/"})
+	if err != nil || len(o.Paths) != 1 || o.Password != "" {
+		t.Fatalf("a trailing slash makes a path: %+v %v", o, err)
+	}
+	o, err = Parse(Transfer, []string{"a:b"})
+	if err != nil || o.Password != "a:b" || len(o.Headers) != 0 {
+		t.Fatalf("a header shape is a password in transfer mode: %+v %v", o, err)
+	}
+	if _, err := Parse(Transfer, []string{"tiger", "lion"}); err == nil {
+		t.Fatal("two passwords should fail")
+	}
+
+	o, err = Parse(Transfer, []string{"1.4", "extract", "out", "scan"})
+	if err != nil || !o.Extract || o.ExtractTo != "out" || !o.Scan || len(o.Items) != 1 {
+		t.Fatalf("download words after a pull: %+v %v", o, err)
+	}
+	if _, err := Parse(FTP, []string{"extract"}); err == nil {
+		t.Fatal("extract still means nothing in ftp mode")
+	}
+}

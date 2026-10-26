@@ -374,3 +374,90 @@ func TestTarHardLink(t *testing.T) {
 		t.Fatal("hard link outside the folder should be skipped")
 	}
 }
+
+var tarTime = time.Date(2021, 5, 6, 7, 8, 9, 0, time.UTC)
+
+// tarBytes builds a plain tar in memory; files get mode 0644 and tarTime.
+func tarBytes(t *testing.T, entries []entry) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	for _, e := range entries {
+		h := &tar.Header{Name: e.name, Mode: 0o644, Size: int64(len(e.body)), ModTime: tarTime, Typeflag: tar.TypeReg}
+		switch {
+		case e.dir:
+			h.Typeflag, h.Mode, h.Size = tar.TypeDir, 0o755, 0
+		case e.link != "":
+			h.Typeflag, h.Linkname, h.Size = tar.TypeSymlink, e.link, 0
+		}
+		if err := tw.WriteHeader(h); err != nil {
+			t.Fatal(err)
+		}
+		if h.Typeflag == tar.TypeReg {
+			tw.Write([]byte(e.body))
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestExtractTar(t *testing.T) {
+	dir := setup(t)
+	big := strings.Repeat("z", 100<<10)
+	stream := tarBytes(t, []entry{
+		{name: "a/b.txt", body: "hello"},
+		{name: "c.bin", body: big},
+		{name: "../evil", body: "bad"},
+		{name: "/etc/x", body: "bad"},
+		{name: "link", link: "a/b.txt"},
+	})
+	nf, nb, err := ExtractTar(context.Background(), bytes.NewReader(stream), dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if read(t, filepath.Join(dir, "a", "b.txt")) != "hello" || read(t, filepath.Join(dir, "c.bin")) != big {
+		t.Fatal("content wrong")
+	}
+	fi, err := os.Stat(filepath.Join(dir, "a", "b.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.ModTime().Unix() != tarTime.Unix() {
+		t.Fatalf("mtime not kept: %v", fi.ModTime())
+	}
+	if exists(filepath.Join(filepath.Dir(dir), "evil")) || exists(filepath.Join(dir, "evil")) {
+		t.Fatal("entry leaving the folder should be skipped")
+	}
+	// An absolute path loses its leading slash and lands inside, as tar does.
+	if exists(filepath.Join(filepath.Dir(dir), "etc")) || read(t, filepath.Join(dir, "etc", "x")) != "bad" {
+		t.Fatal("absolute entry should be unpacked inside the folder")
+	}
+	if target, err := os.Readlink(filepath.Join(dir, "link")); err != nil || target != filepath.FromSlash("a/b.txt") {
+		t.Fatalf("symlink not created: %q %v", target, err)
+	}
+	if read(t, filepath.Join(dir, "link")) != "hello" {
+		t.Fatal("symlink does not resolve")
+	}
+	// a/b.txt, c.bin, etc/x and the link are counted; the skipped entry is not.
+	if want := int64(len("hello") + len(big) + len("bad")); nf != 4 || nb != want {
+		t.Fatalf("got %d entries, %d bytes, want 4, %d", nf, nb, want)
+	}
+
+	// Again into the same folder: an existing file is skipped, not overwritten.
+	again := tarBytes(t, []entry{{name: "c.bin", body: "new"}})
+	nf, nb, err = ExtractTar(context.Background(), bytes.NewReader(again), dir, nil)
+	if err != nil || nf != 0 || nb != 0 {
+		t.Fatalf("existing file: got %d entries, %d bytes, %v", nf, nb, err)
+	}
+	if read(t, filepath.Join(dir, "c.bin")) != big {
+		t.Fatal("existing file overwritten")
+	}
+
+	// A stream cut short is a damaged archive, not a write failure.
+	_, _, err = ExtractTar(context.Background(), bytes.NewReader(stream[:len(stream)/2]), t.TempDir(), nil)
+	if err == nil || errors.As(err, new(*errs.Write)) || !errors.As(err, new(*errs.Archive)) || !strings.Contains(err.Error(), "damaged tar stream") {
+		t.Fatalf("want *errs.Archive, got %v", err)
+	}
+}

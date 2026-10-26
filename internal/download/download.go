@@ -421,8 +421,8 @@ func loadState(p string) *state {
 		return nil
 	}
 	var st state
-	if json.Unmarshal(b, &st) != nil {
-		return nil
+	if json.Unmarshal(b, &st) != nil || st.URL == "" {
+		return nil // not ours: a transfer in progress keeps its sidecar
 	}
 	if st.Key == "" {
 		st.Key = st.URL

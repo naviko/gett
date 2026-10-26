@@ -555,3 +555,18 @@ func TestKeyResumesAcrossURLs(t *testing.T) {
 	}
 	t.Fatalf("second URL started over instead of resuming: range starts %v", b.rangeStarts)
 }
+
+func TestForeignSidecarIsKept(t *testing.T) {
+	t.Chdir(t.TempDir())
+	os.WriteFile("x.gett", []byte(`{"kind":"file","sharer":"laptop","path":"x","done":[[0,1]]}`), 0o644)
+	os.WriteFile("x.part", []byte("partial"), 0o644)
+	st, name, resumed := pickTarget("x", "http://h/x", "http://h/x", 10, "", "")
+	if st != nil || resumed || name != "x (1)" {
+		t.Fatalf("pickTarget over a transfer in progress: %v %q %v", st, name, resumed)
+	}
+	for _, f := range []string{"x.gett", "x.part"} {
+		if _, err := os.Stat(f); err != nil {
+			t.Fatalf("%s was removed", f)
+		}
+	}
+}

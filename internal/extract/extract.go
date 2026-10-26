@@ -215,6 +215,44 @@ func unpack(ctx context.Context, f *os.File, archive, dest, ext string, ex archi
 	return nil
 }
 
+// ExtractTar unpacks a tar stream straight into dir, which must exist. An
+// entry that would land outside dir is skipped, and so is one whose target
+// already exists, so nothing in dir is overwritten; symlinks are created
+// last and only when they stay inside dir. Nothing is staged, so what was
+// written before a failure stays. bar may be nil. It returns the number of
+// entries written, links included, and the bytes the files hold. Disk
+// trouble is an *errs.Write, a stream that cannot be read to the end an
+// *errs.Archive, and a cancelled ctx comes back as is.
+func ExtractTar(ctx context.Context, r io.Reader, dir string, bar *term.Bar) (files, bytes int64, err error) {
+	if bar == nil {
+		bar = &term.Bar{}
+	}
+	u := newUnpacker(ctx, dir, bar, archives.Tar{})
+	defer u.cancel()
+	err = archives.Tar{}.Extract(u.base, r, u.handle)
+	if werr := u.wait(); werr != nil {
+		err = werr // a failed write is the cause; the library only saw the cancel
+	}
+	if err == nil {
+		err = u.links()
+	}
+	files, bytes = u.files.Load(), u.bytes.Load()
+	switch {
+	case err == nil:
+	case ctx.Err() != nil:
+		err = ctx.Err()
+	case errors.As(err, new(*errs.Write)):
+	default:
+		where := ""
+		var ee *entryError
+		if errors.As(err, &ee) {
+			where, err = " at "+term.Sanitize(ee.name), ee.err
+		}
+		err = &errs.Archive{Msg: fmt.Sprintf("damaged tar stream%s (%s)", where, term.Sanitize(err.Error()))}
+	}
+	return files, bytes, err
+}
+
 func files(n int64) string {
 	if n == 1 {
 		return "1 file"

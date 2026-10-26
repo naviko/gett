@@ -11,6 +11,7 @@ gett URL sandbox              same, keep the sandbox: ssh name
 gett ftp upload URL FILE|DIR  upload
 gett ftp ls URL               list
 gett ftp rm URL               delete
+gett transfer [DIR]           share or pull on the local network (experimental)
 gett net ping HOST            network tools
 gett send URL                 request
 ```
@@ -83,6 +84,47 @@ used when the server offers it, and always with `ftps://`. Uploads and folder
 downloads transfer several files at once, skip files already present, and
 resume partial files when the command is run again. Deleting a folder
 requires the trailing `/`.
+
+## Transfer (experimental)
+
+```
+gett transfer photos/                        share a folder on the local network, Ctrl-C ends it
+gett transfer photos/ videos/ report.pdf     share several
+gett transfer photos/ tiger                  with a password
+gett transfer                                list what is shared, numbered
+gett transfer tiger                          also the shares that password unlocks
+gett transfer ls 1.2                         list inside an item
+gett transfer 1 keep/                        pull item 1 into keep/
+gett transfer 1.3 2.1 3                      several items, into the current folder
+gett transfer 2.1 | sha256sum                a file streams to stdout
+gett transfer 1.4 extract                    unpack on arrival; also scan, sandbox
+```
+
+A listing shows every computer sharing on the local network, its items
+numbered under a `shared by:` line, and ends with the commands to type next:
+
+```
+shared by: laptop
+1      photos/                           2.3 GiB  312 files
+1.1    2024/                           820.1 MiB  120 files
+1.2    cover.jpg                         1.2 MiB
+2      report.pdf                        4.1 MiB
+
+gett transfer 1 keep/              pull item 1 into keep/, or into this folder without keep/
+gett transfer ls 1.1               list inside 1.1
+```
+
+Numbers mean the last list printed; `ls` with a number lists inside a
+folder. With nothing on the network the listing says `no shares found`.
+Piped, the listing is tab-separated with the sharer on every line. A
+password word after the shared paths hides them from public listings; a
+receiver that gave it once keeps it until the share is gone, and the
+`shared by:` line shows it. A pull keeps the folder tree, never overwrites
+(`photos (1)`), skips what is already there, and resumes when the same
+command is run again. The sharer prints one line when a pull starts and one
+when it ends, runs until Ctrl-C and keeps nothing on disk. Connections are
+direct and ignore proxy settings; `verbose` shows addresses and ports, which
+is what to open in a firewall.
 
 ## Extract
 
@@ -251,6 +293,7 @@ exit  message                                                  meaning
 6     could not resolve host example.invalid                   DNS has no address for the name
 6     no gateway could serve ipfs://...                        no IPFS gateway has the content
 7     could not connect (example.com)                          connection refused or network unreachable
+7     could not connect to laptop (192.168.1.20:41234)         transfer: the sharer is listed but refuses connections
 9     server said 550 File unavailable                         FTP: no such file, or no permission
 22    server returned 404 Not Found for https://...            HTTP error status
 23    could not write file: ...                                disk full, folder missing, or no permission

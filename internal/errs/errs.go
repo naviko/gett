@@ -46,6 +46,12 @@ type (
 	// Elevated is a command the operating system refused without root or
 	// Administrator rights. Cmd is the command as typed, like "net trace".
 	Elevated struct{ Cmd string }
+	// Peer is a computer on the local network that is listed but could not
+	// be reached. Name is the computer as listed, Addr its address and port.
+	Peer struct {
+		Name, Addr string
+		Err        error
+	}
 )
 
 func (e *Usage) Error() string      { return e.Msg }
@@ -64,6 +70,8 @@ func (e *Gateway) Error() string    { return e.Msg }
 func (e *Archive) Error() string    { return e.Msg }
 func (e *Sandbox) Error() string    { return e.Msg }
 func (e *Elevated) Error() string   { return e.Cmd + " needs elevated rights" }
+func (e *Peer) Error() string       { return "could not connect to " + e.Name + " (" + e.Addr + ")" }
+func (e *Peer) Unwrap() error       { return e.Err }
 func (e *Resumable) Unwrap() error  { return e.Err }
 
 // Code maps an error to curl's exit code for the same failure.
@@ -86,6 +94,7 @@ func Code(err error) int {
 		denied   *Denied
 		redirect *Redirect
 		gateway  *Gateway
+		peer     *Peer
 		dns      *net.DNSError
 		tp       *textproto.Error
 		certErr  *tls.CertificateVerificationError
@@ -96,6 +105,8 @@ func Code(err error) int {
 		return 2
 	case errors.As(err, &badURL):
 		return 3
+	case errors.As(err, &peer):
+		return 7
 	case errors.Is(err, context.Canceled):
 		return 130
 	case errors.Is(err, context.DeadlineExceeded), isTimeout(err):
@@ -179,6 +190,10 @@ func Message(err error) string {
 	var rs *Resumable
 	if errors.As(err, &rs) {
 		return Message(rs.Err) + ". Run the same command again to resume"
+	}
+	var peer *Peer
+	if errors.As(err, &peer) {
+		return peer.Error()
 	}
 	host := ""
 	if errors.As(err, &uerr) {
