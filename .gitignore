@@ -12,6 +12,7 @@
 .DS_Store
 .idea/
 .vscode/
+.devin/
 .claude/
 .codex/
 .opencode/
