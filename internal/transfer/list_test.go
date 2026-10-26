@@ -94,10 +94,10 @@ func TestListAndLs(t *testing.T) {
 	if out.String() != want {
 		t.Fatalf("listing:\n%s\nwant:\n%s", out.String(), want)
 	}
-	if !strings.Contains(msgs, "could not connect to ghost (") || !strings.Contains(msgs, "future speaks gett api 9, this is 1") {
+	if !strings.Contains(msgs, "could not connect to ghost (") || !strings.Contains(msgs, "future runs a different gett version; update the older one") {
 		t.Fatalf("stderr: %q", msgs)
 	}
-	if !strings.Contains(msgs, "\ngett transfer 1 keep/") || !strings.Contains(msgs, "gett transfer ls 1.1 ") {
+	if !strings.Contains(msgs, "\nex: gett transfer 1 ") || !strings.Contains(msgs, "\n    gett transfer 1 <folder>/") || !strings.Contains(msgs, "\n    gett transfer ls 1.1 ") {
 		t.Fatalf("footer: %q", msgs)
 	}
 	s := loadLast()

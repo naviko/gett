@@ -125,7 +125,7 @@ func List(ctx context.Context, password string, w io.Writer) error {
 	var wg sync.WaitGroup
 	for i, pr := range peers {
 		if pr.API != api {
-			term.Info("%s speaks gett api %d, this is %d", pr.Name, pr.API, api)
+			term.Info("%s runs a different gett version; update the older one", pr.Name)
 			continue
 		}
 		wg.Add(1)
@@ -297,7 +297,7 @@ func reach(ctx context.Context, sh savedSharer, passwords []string) (*peer, erro
 		}
 	}
 	if pr.API != 0 && pr.API != api {
-		return nil, fmt.Errorf("%s speaks gett api %d, this is %d", pr.Name, pr.API, api)
+		return nil, fmt.Errorf("%s runs a different gett version; update the older one", pr.Name)
 	}
 	return &peer{Name: sh.Name, Addr: pr.Addr, Port: pr.Port, Passwords: passwords, client: newClient()}, nil
 }
@@ -361,9 +361,10 @@ func printList(w io.Writer, s *saved, prefix string) {
 		return
 	}
 	term.Info("")
-	term.Info("%-34s %s", "gett transfer "+pull+" keep/", "pull item "+pull+" into keep/, or into this folder without keep/")
+	term.Info("ex: %-31s%s", "gett transfer "+pull, "download item "+pull+" into this folder")
+	term.Info("    %-31s%s", "gett transfer "+pull+" <folder>/", "into <folder>/")
 	if inside != "" {
-		term.Info("%-34s %s", "gett transfer ls "+inside, "list inside "+inside)
+		term.Info("    %-31s%s", "gett transfer ls "+inside, "list inside "+inside)
 	}
 }
 

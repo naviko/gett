@@ -90,7 +90,7 @@ func (p *peer) do(ctx context.Context, method, path string, q url.Values, body i
 	resp.Body.Close()
 	text := strings.TrimSpace(string(b))
 	if resp.StatusCode == http.StatusUpgradeRequired {
-		return nil, fmt.Errorf("%s speaks gett %s, this is api %d", p.Name, text, api)
+		return nil, fmt.Errorf("%s runs a different gett version; update the older one", p.Name)
 	}
 	return nil, &apiError{Code: resp.StatusCode, Body: text}
 }

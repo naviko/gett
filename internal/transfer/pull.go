@@ -483,7 +483,7 @@ func pullFolder(ctx context.Context, p *peer, it savedItem, fresh item, part, me
 	// A small file the sharer did not send is gone or unreadable there.
 	for _, f := range small {
 		if _, err := root.Stat(f.Path); err != nil {
-			term.Info("skipped %s/%s: not served by %s", it.Path, f.Path, p.Name)
+			term.Info("skipped %s/%s: %s did not send it", it.Path, f.Path, p.Name)
 		}
 	}
 	return nil

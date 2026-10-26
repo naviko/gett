@@ -81,7 +81,7 @@ Transfer (experimental)
   gett transfer                                             list what is shared, numbered
   gett transfer tiger                                       also the shares that password unlocks
   gett transfer ls 1.2                                      list inside an item
-  gett transfer 1 keep/                                     pull item 1 into keep/
+  gett transfer 1 <folder>/                                 download item 1 into <folder>/
   gett transfer 1.3 2.1 3                                   several items, into the current folder
   gett transfer 2.1 | sha256sum                             a file streams to stdout
   gett transfer 1.4 extract                                 unpack on arrival; also scan, sandbox
@@ -424,7 +424,7 @@ func runCoin(cmd *cobra.Command, a []string) error {
 }
 
 // runTransfer handles "gett transfer": share paths, list what is shared on
-// the local network, list inside an item, or pull items by number.
+// the local network, list inside an item, or download items by number.
 func runTransfer(cmd *cobra.Command, a []string) error {
 	ctx, o, err := setup(cmd, args.Transfer, a)
 	if err != nil {
@@ -465,7 +465,7 @@ func runTransfer(cmd *cobra.Command, a []string) error {
 		return nil
 	case len(o.Paths) > 0:
 		if o.Sandbox || o.Scan || o.Extract {
-			return &errs.Usage{Msg: "scan, sandbox and extract apply to a pull"}
+			return &errs.Usage{Msg: "scan, sandbox and extract apply to a download"}
 		}
 		return transfer.Share(ctx, o.Paths, o.Password)
 	}

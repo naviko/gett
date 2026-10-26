@@ -11,7 +11,7 @@ gett URL sandbox              same, keep the sandbox: ssh name
 gett ftp upload URL FILE|DIR  upload
 gett ftp ls URL               list
 gett ftp rm URL               delete
-gett transfer [DIR]           share or pull on the local network (experimental)
+gett transfer [DIR]           share or download on the local network (experimental)
 gett net ping HOST            network tools
 gett send URL                 request
 ```
@@ -94,7 +94,7 @@ gett transfer photos/ tiger                  with a password
 gett transfer                                list what is shared, numbered
 gett transfer tiger                          also the shares that password unlocks
 gett transfer ls 1.2                         list inside an item
-gett transfer 1 keep/                        pull item 1 into keep/
+gett transfer 1 <folder>/                    download item 1 into <folder>/
 gett transfer 1.3 2.1 3                      several items, into the current folder
 gett transfer 2.1 | sha256sum                a file streams to stdout
 gett transfer 1.4 extract                    unpack on arrival; also scan, sandbox
@@ -110,8 +110,9 @@ shared by: laptop
 1.2    cover.jpg                         1.2 MiB
 2      report.pdf                        4.1 MiB
 
-gett transfer 1 keep/              pull item 1 into keep/, or into this folder without keep/
-gett transfer ls 1.1               list inside 1.1
+ex: gett transfer 1                download item 1 into this folder
+    gett transfer 1 <folder>/      into <folder>/
+    gett transfer ls 1.1           list inside 1.1
 ```
 
 Numbers mean the last list printed; `ls` with a number lists inside a
@@ -119,10 +120,10 @@ folder. With nothing on the network the listing says `no shares found`.
 Piped, the listing is tab-separated with the sharer on every line. A
 password word after the shared paths hides them from public listings; a
 receiver that gave it once keeps it until the share is gone, and the
-`shared by:` line shows it. A pull keeps the folder tree, never overwrites
-(`photos (1)`), skips what is already there, and resumes when the same
-command is run again. The sharer prints one line when a pull starts and one
-when it ends, runs until Ctrl-C and keeps nothing on disk. Connections are
+`shared by:` line shows it. A download keeps the folder tree, never
+overwrites (`photos (1)`), skips what is already there, and resumes when
+the same command is run again. The sharer prints one line when a download
+starts and one when it ends, runs until Ctrl-C and keeps nothing on disk. Connections are
 direct and ignore proxy settings; `verbose` shows addresses and ports, which
 is what to open in a firewall.
 
