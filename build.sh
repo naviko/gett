@@ -5,6 +5,7 @@
 #   ./build.sh          0.1.0 -> 0.1.1
 #   ./build.sh minor    0.1.0 -> 0.2.0
 #   ./build.sh major    0.1.0 -> 1.0.0
+#   ./build.sh same     0.1.1 -> 0.1.1 again: the release is replaced, the tag moved
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -15,11 +16,13 @@ die() { echo "build.sh: $*" >&2; exit 1; }
 # --- new version -------------------------------------------------------------
 OLD=$(tr -d '[:space:]' < version.txt)
 IFS=. read -r MAJ MIN PAT <<< "$OLD"
+SAME=
 case "${1:-patch}" in
   patch) PAT=$((PAT + 1)) ;;
   minor) MIN=$((MIN + 1)); PAT=0 ;;
   major) MAJ=$((MAJ + 1)); MIN=0; PAT=0 ;;
-  *) die "unknown argument '$1' (use: patch, minor, major)" ;;
+  same) SAME=1 ;;
+  *) die "unknown argument '$1' (use: patch, minor, major, same)" ;;
 esac
 NEW="$MAJ.$MIN.$PAT"
 NOTES="changes-$NEW.txt"
@@ -31,9 +34,12 @@ gh auth status >/dev/null 2>&1 || die "run: gh auth login"
 git rev-parse --verify HEAD >/dev/null 2>&1 || die "make a first commit before releasing"
 DIRTY=$(git status --porcelain | grep -v " $NOTES\$" || true)
 [ -z "$DIRTY" ] || die "commit or stash your changes first:"$'\n'"$DIRTY"
-git rev-parse "v$NEW" >/dev/null 2>&1 && die "tag v$NEW already exists"
-
-echo "gett $OLD -> $NEW"
+if [ -z "$SAME" ]; then
+  git rev-parse "v$NEW" >/dev/null 2>&1 && die "tag v$NEW already exists"
+  echo "gett $OLD -> $NEW"
+else
+  echo "gett $NEW again"
+fi
 go test ./... >/dev/null || die "tests failed"
 
 # --- build -------------------------------------------------------------------
@@ -51,9 +57,16 @@ trap - ERR
 
 # --- commit, tag, push, release ---------------------------------------------
 git add version.txt "$NOTES"
-git commit -q -m "v$NEW"
-git tag -a "v$NEW" -m "gett $NEW"
-git push -q origin HEAD
-git push -q origin "v$NEW"
+git diff --cached --quiet || git commit -q -m "v$NEW"
+if [ -n "$SAME" ]; then
+  gh release delete "v$NEW" --yes >/dev/null 2>&1 || true
+  git tag -a -f "v$NEW" -m "gett $NEW"
+  git push -q origin HEAD
+  git push -q -f origin "v$NEW"
+else
+  git tag -a "v$NEW" -m "gett $NEW"
+  git push -q origin HEAD
+  git push -q origin "v$NEW"
+fi
 gh release create "v$NEW" dist/* --title "gett $NEW" --notes-file "$NOTES"
 echo "released gett $NEW"
