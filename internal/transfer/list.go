@@ -321,7 +321,7 @@ func printList(w io.Writer, s *saved, prefix string) {
 			continue
 		}
 		sh := s.Sharers[it.Sharer]
-		name := term.Sanitize(filepath.Base(filepath.FromSlash(it.Path)))
+		name := term.Sanitize(it.Path)
 		if it.Dir {
 			name += "/"
 		}

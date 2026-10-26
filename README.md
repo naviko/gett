@@ -106,8 +106,8 @@ numbered under a `shared by:` line, and ends with the commands to type next:
 ```
 shared by: laptop
 1      photos/                           2.3 GiB  312 files
-1.1    2024/                           820.1 MiB  120 files
-1.2    cover.jpg                         1.2 MiB
+1.1    photos/2024/                    820.1 MiB  120 files
+1.2    photos/cover.jpg                  1.2 MiB
 2      report.pdf                        4.1 MiB
 
 ex: gett transfer 1                download item 1 into this folder

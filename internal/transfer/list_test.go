@@ -88,8 +88,8 @@ func TestListAndLs(t *testing.T) {
 	})
 	want := "shared by: laptop\n" +
 		row("1", "photos/", "5 B", "2 files") +
-		row("1.1", "2024/", "2 B", "1 file") +
-		row("1.2", "a.jpg", "3 B", "") +
+		row("1.1", "photos/2024/", "2 B", "1 file") +
+		row("1.2", "photos/a.jpg", "3 B", "") +
 		row("2", "report.pdf", "4 B", "")
 	if out.String() != want {
 		t.Fatalf("listing:\n%s\nwant:\n%s", out.String(), want)
@@ -144,7 +144,7 @@ func TestListAndLs(t *testing.T) {
 	out.Reset()
 	List(context.Background(), "", &out)
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
-	if len(lines) != 6 || lines[1] != "1.1\t2024/\t2\t1\tlaptop\t" || lines[2] != "1.2\ta.jpg\t3\t\tlaptop\t" || lines[4] != "3\tmusic/\t4\t1\tnas\ttiger" {
+	if len(lines) != 6 || lines[1] != "1.1\tphotos/2024/\t2\t1\tlaptop\t" || lines[2] != "1.2\tphotos/a.jpg\t3\t\tlaptop\t" || lines[4] != "3\tmusic/\t4\t1\tnas\ttiger" {
 		t.Fatalf("tsv:\n%s", out.String())
 	}
 	tty = true
@@ -154,7 +154,7 @@ func TestListAndLs(t *testing.T) {
 	if err := Ls(context.Background(), "1.1", &out); err != nil {
 		t.Fatal(err)
 	}
-	if out.String() != "shared by: laptop\n"+row("1.1.1", "b.jpg", "2 B", "") {
+	if out.String() != "shared by: laptop\n"+row("1.1.1", "photos/2024/b.jpg", "2 B", "") {
 		t.Fatalf("ls:\n%q", out.String())
 	}
 	if s = loadLast(); len(s.Items) != 7 || s.Items[2].N != "1.1.1" || s.Items[2].Path != "photos/2024/b.jpg" {
