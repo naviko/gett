@@ -1,0 +1,18 @@
+# build output
+/gett
+/gett.exe
+/gett-test
+/dist/
+
+# interrupted downloads
+*.part
+*.gett
+
+# editors and tools
+.DS_Store
+.idea/
+.vscode/
+.claude/
+.codex/
+.opencode/
+.env
