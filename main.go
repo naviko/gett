@@ -52,15 +52,15 @@ Download
 
 Extract
   gett https://example.com/src.tar.gz extract               download, then unpack into src/
-  gett https://example.com/game.zip extract games/          unpack into games/
+  gett https://example.com/game.zip extract games/          download, unpack into games/
   gett extract src.tar.gz                                   unpack a file, into src/
-  gett extract game.zip games/                              into games/
+  gett extract game.zip games/                              unpack a local file into games/
   gett extract app.log.gz                                   a .gz or .xz: gives app.log
-  gett extract app.log.gz | grep ERROR                      or stream it
+  gett extract app.log.gz | grep ERROR                      stream a compressed file
 
 Sandbox (experimental)
   gett https://example.com/tool.tar.gz scan                 unpack into a sandbox, scan, report, dispose
-  gett https://example.com/tool.tar.gz sandbox              same, keep the sandbox: ssh tool
+  gett https://example.com/tool.tar.gz sandbox              unpack into a sandbox, scan, keep the sandbox: ssh tool
   gett sandbox tool.tar.gz                                  put a local file or folder into a sandbox, scan, keep the sandbox
   gett sandbox                                              list sandboxes
   gett sandbox rm tool                                      delete a sandbox
@@ -75,16 +75,17 @@ FTP
   gett ftp rm ftp://host/old/2019/                          delete a folder and its contents
 
 Transfer (experimental)
-  gett transfer photos/                                     share a folder on the local network, Ctrl-C ends it
-  gett transfer photos/ videos/ report.pdf                  share several
-  gett transfer photos/ tiger                               with a password
-  gett transfer                                             list what is shared, numbered
-  gett transfer tiger                                       also the shares that password unlocks
-  gett transfer ls 1.2                                      list inside an item
+  gett transfer photos/                                     share a folder on the local network, Ctrl+C ends it
+  gett transfer photos/ videos/ report.pdf                  share two folders and a file
+  gett transfer photos/ tiger                               share a folder with the password tiger
+  gett transfer                                             list what is shared on the local network, numbered
+  gett transfer tiger                                       list what is shared, including shares with the password tiger
+  gett transfer ls 1.2                                      list inside item 1.2
   gett transfer 1 <folder>/                                 download item 1 into <folder>/
-  gett transfer 1.3 2.1 3                                   several items, into the current folder
-  gett transfer 2.1 | sha256sum                             a file streams to stdout
-  gett transfer 1.4 extract                                 unpack on arrival; also scan, sandbox
+  gett transfer 1.3 2.1 3                                   download items 1.3, 2.1 and 3 into the current folder
+  gett transfer 2.1 | sha256sum                             stream file 2.1 to stdout
+  gett transfer 1.4 extract                                 download item 1.4, then unpack it
+  gett transfer 1.4 scan                                    download item 1.4 into a sandbox, scan, report, dispose
 
 Request
   gett send https://api.example.com/users                   GET
@@ -108,7 +109,7 @@ Net (experimental)
 Coin (experimental)
   gett coin btc 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa          address: balance, transactions
   gett coin btc 4a5e1e4baab89f3a32518a88c31bc87f...         transaction: status, amount, fee
-  gett coin eth 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045  also ltc doge dash bch sol trx
+  gett coin eth 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045  coins: btc eth ltc doge dash bch sol trx
 
 Other examples
   gett https://api.example.com/me "X-Token: abc"            header

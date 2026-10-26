@@ -1,17 +1,20 @@
 # gett
 
-Simple utility for downloading files, extracting archives, FTP, network tools, API calls using sandboxed environments with lightweight virus scanning to keep things safe. 
+Simple utility for downloading files, extracting archives, FTP, sharing on
+the local network, network tools and API calls, with sandboxed scanning to
+keep things safe.
 
 ```
 gett URL                      download (http, ftp, torrent, ipfs)
 gett URL extract              download and unpack
 gett extract FILE [DIR]       unpack zip, tar, 7z, rar, gz ...
 gett URL scan                 unpack into a sandbox, scan, report results, dispose of sandbox
-gett URL sandbox              same, keep the sandbox: ssh name
+gett URL sandbox              unpack into a sandbox, scan, keep the sandbox: ssh name
 gett ftp upload URL FILE|DIR  upload
 gett ftp ls URL               list
 gett ftp rm URL               delete
-gett transfer [DIR]           share or download on the local network (experimental)
+gett transfer DIR             share a folder on the local network (experimental)
+gett transfer                 list and download what others share
 gett net ping HOST            network tools
 gett send URL                 request
 ```
@@ -67,7 +70,7 @@ other gateways.
 gett ftp://host/pub/linux.iso                             download a file
 gett ftp://host/pub/photos/                               download a folder into ./photos/
 gett ftp://host/pub/README | less                         pipe a file
-gett ftp://host:2121/pub/linux.iso                        another port
+gett ftp://host:2121/pub/linux.iso                        download from port 2121
 gett ftp://host//var/log/syslog                           absolute path (two slashes)
 
 gett ftp upload ftp://user:pass@host/backups ./photos     upload a folder
@@ -88,16 +91,17 @@ requires the trailing `/`.
 ## Transfer (experimental)
 
 ```
-gett transfer photos/                        share a folder on the local network, Ctrl-C ends it
-gett transfer photos/ videos/ report.pdf     share several
-gett transfer photos/ tiger                  with a password
-gett transfer                                list what is shared, numbered
-gett transfer tiger                          also the shares that password unlocks
-gett transfer ls 1.2                         list inside an item
+gett transfer photos/                        share a folder on the local network, Ctrl+C ends it
+gett transfer photos/ videos/ report.pdf     share two folders and a file
+gett transfer photos/ tiger                  share a folder with the password tiger
+gett transfer                                list what is shared on the local network, numbered
+gett transfer tiger                          list what is shared, including shares with the password tiger
+gett transfer ls 1.2                         list inside item 1.2
 gett transfer 1 <folder>/                    download item 1 into <folder>/
-gett transfer 1.3 2.1 3                      several items, into the current folder
-gett transfer 2.1 | sha256sum                a file streams to stdout
-gett transfer 1.4 extract                    unpack on arrival; also scan, sandbox
+gett transfer 1.3 2.1 3                      download items 1.3, 2.1 and 3 into the current folder
+gett transfer 2.1 | sha256sum                stream file 2.1 to stdout
+gett transfer 1.4 extract                    download item 1.4, then unpack it
+gett transfer 1.4 scan                       download item 1.4 into a sandbox, scan, report, dispose
 ```
 
 A listing shows every computer sharing on the local network, its items
@@ -117,28 +121,28 @@ ex: gett transfer 1                download item 1 into this folder
 
 Numbers mean the last list printed; `ls` with a number lists inside a
 folder. With nothing on the network the listing says `no shares found`.
-Piped, the listing is tab-separated with the sharer on every line. A
-password word after the shared paths hides them from public listings; a
-receiver that gave it once keeps it until the share is gone, and the
+When piped, every line is tab-separated and names the computer. A password
+word after the shared paths hides them from public listings; a computer
+that gave the password once keeps it until the share is gone, and the
 `shared by:` line shows it. A download keeps the folder tree, never
 overwrites (`photos (1)`), skips what is already there, and resumes when
-the same command is run again. The sharer prints one line when a download
-starts and one when it ends, runs until Ctrl-C and keeps nothing on disk. Connections are
-direct and ignore proxy settings; `verbose` shows addresses and ports, which
-is what to open in a firewall.
+the same command is run again. The sharing computer prints one line when a
+download starts and one when it ends, runs until Ctrl+C and keeps nothing
+on disk. Connections are direct and ignore proxy settings; `verbose` shows
+addresses and ports, which is what to open in a firewall.
 
 ## Extract
 
 ```
 gett https://example.com/src.tar.gz extract              download, unpack into ./src/
-gett https://example.com/game.zip extract games/         unpack into games/
+gett https://example.com/game.zip extract games/         download, unpack into games/
 gett https://example.com/game.zip g.zip extract          save as g.zip, unpack into ./g/
 gett https://example.com/app.log.gz extract              one compressed file: gives app.log
 gett extract src.tar.gz                                  unpack a local file, into ./src/
-gett extract game.zip games/                             into games/
+gett extract game.zip games/                             unpack a local file into games/
 gett extract firmware.bin                                a zip in disguise opens anyway
 gett extract app.log.gz | grep ERROR                     stream a compressed file
-gett extract https://example.com/src.tar.gz              same as the first line
+gett extract https://example.com/src.tar.gz              download, unpack into ./src/
 ```
 
 Supported formats: zip, 7z, rar, tar, tar.gz, tar.xz, tar.zst, tar.bz2, gz,
@@ -154,7 +158,7 @@ damaged is left unchanged.
 
 ```
 gett https://example.com/tool.tar.gz scan           unpack into a sandbox, scan, report results, dispose of sandbox
-gett https://example.com/tool.tar.gz sandbox        same, keep the sandbox: ssh tool
+gett https://example.com/tool.tar.gz sandbox        unpack into a sandbox, scan, keep the sandbox: ssh tool
 gett ftp://host/pub/photos/ sandbox                 download a folder into a sandbox, scan, keep the sandbox
 gett sandbox tool.tar.gz                            put a local file or folder into a sandbox, scan, keep the sandbox
 gett sandbox                                        list sandboxes
@@ -239,15 +243,15 @@ public explorers. A summary is shown on a terminal, raw JSON when piped.
 ```
 gett net ip                        addresses per interface, gateway, dns servers, public ip
 gett net dns example.com           A, AAAA, CNAME, MX, NS and TXT records
-gett net dns example.com MX        one record type
-gett net dns example.com 1.1.1.1   ask that server
+gett net dns example.com MX        MX records only
+gett net dns example.com 1.1.1.1   ask the server 1.1.1.1
 gett net dns 93.184.216.34         reverse lookup
 gett net ping example.com          4 echo requests, then loss and min/avg/max
 gett net ping example.com 10       10 requests; Ctrl+C stops early
 gett net trace example.com         route hop by hop, 30 hops max, 3 probes per hop
 gett net port example.com 443      open, closed or no answer within 3 seconds
 gett net tls example.com           certificate: names, issuer, validity, protocol, cipher
-gett net tls example.com:8443      another port
+gett net tls example.com:8443      certificate on port 8443
 gett net whois example.com         registry record; also for an ip address
 gett net speed                     latency, download and upload, measured against Cloudflare
 ```
@@ -294,7 +298,7 @@ exit  message                                                  meaning
 6     could not resolve host example.invalid                   DNS has no address for the name
 6     no gateway could serve ipfs://...                        no IPFS gateway has the content
 7     could not connect (example.com)                          connection refused or network unreachable
-7     could not connect to laptop (192.168.1.20:41234)         transfer: the sharer is listed but refuses connections
+7     could not connect to laptop (192.168.1.20:41234)         transfer: the computer is listed but refuses connections
 9     server said 550 File unavailable                         FTP: no such file, or no permission
 22    server returned 404 Not Found for https://...            HTTP error status
 23    could not write file: ...                                disk full, folder missing, or no permission
@@ -331,12 +335,15 @@ The version is read from `version.txt`.
 ./build.sh          0.1.0 -> 0.1.1
 ./build.sh minor    0.1.0 -> 0.2.0
 ./build.sh major    0.1.0 -> 1.0.0
+./build.sh same     0.1.1 -> 0.1.1, the release is replaced
 ```
 
 Release notes go in `changes-<version>.txt` first. The script updates
 `version.txt`, builds every platform into `dist/`, writes `SHA256SUMS`,
 commits, tags, pushes and publishes a GitHub release. It stops when there are
-uncommitted changes or `gh auth login` has not been run.
+uncommitted changes or `gh auth login` has not been run. `same` keeps the
+version, deletes that version's release, moves its tag to the current commit
+and publishes again.
 
 ## License
 
