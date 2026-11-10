@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	_ "embed"
 	"errors"
@@ -117,6 +118,7 @@ Other examples
   gett https://example.com/file 5m                          give up after 5 minutes
   gett https://example.com/file verbose                     show everything
   gett https://example.com/file silent                      only errors
+  gett https://example.com/file force                       continue when a check finds a problem
   gett https://example.com/a.zip extract 5m silent          several at once
 
 Defaults, nothing to set
@@ -129,7 +131,7 @@ Defaults, nothing to set
   timeout        none; 30s to connect, 30s without data
   retries        3 with backoff, 429 and 5xx retried
   proxy          HTTP_PROXY / HTTPS_PROXY / NO_PROXY
-  TLS            verified; ftp:// uses TLS when offered, ftps:// always
+  TLS            verified, a certificate problem asks before downloading; ftp:// uses TLS when offered, ftps:// always
   ftp            up to 8 connections, resumes, skips files already there
   transfer       local network only, up to 16 connections, resumes, never overwrites
   extract        every core for zip, never overwrites, archive kept
@@ -173,7 +175,10 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := root.ExecuteContext(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", term.Sanitize(errs.Message(err)))
+		var s *shown
+		if !errors.As(err, &s) {
+			fmt.Fprintf(os.Stderr, "%s\n", term.Sanitize(errs.Message(err)))
+		}
 		os.Exit(errs.Code(err))
 	}
 }
@@ -206,7 +211,29 @@ func runDownload(cmd *cobra.Command, a []string) error {
 	if err != nil {
 		return err
 	}
+	// The certificate is always checked first. A problem is shown, then
+	// "force" or a yes downloads again without the check; the sandbox tools
+	// still come through the checking client.
 	saved, err := fetch(ctx, a[0], o, client)
+	if errs.Code(err) == 60 && (o.Force || canAsk()) {
+		problem := term.Sanitize(errs.Message(err))
+		if o.Force {
+			term.Info("%s", problem)
+		} else {
+			yes, aerr := confirm(ctx, problem+"\ndownload anyway? [y/N] ")
+			if aerr != nil {
+				return aerr
+			}
+			if !yes {
+				return &shown{err}
+			}
+		}
+		dl, cerr := httpx.NewClient(httpx.Config{CookieFile: o.CookieFile, Retries: true, Insecure: true})
+		if cerr != nil {
+			return cerr
+		}
+		saved, err = fetch(ctx, a[0], o, dl)
+	}
 	if err != nil {
 		return err
 	}
@@ -217,6 +244,36 @@ func runDownload(cmd *cobra.Command, a []string) error {
 		return nil
 	}
 	return unpack(ctx, saved, o.ExtractTo)
+}
+
+// shown is an error whose line is already on the terminal: main only takes
+// the exit code from it.
+type shown struct{ error }
+
+func (s *shown) Unwrap() error { return s.error }
+
+// canAsk reports whether a question can be put to the user: on a terminal,
+// not piped, not silent.
+func canAsk() bool {
+	return !term.Silent && term.StdoutTTY() && term.StdinTTY()
+}
+
+// confirm prints a question and reads the answer: only y or yes mean yes.
+// Ctrl+C while waiting ends the command.
+func confirm(ctx context.Context, question string) (bool, error) {
+	fmt.Fprint(os.Stderr, question)
+	answer := make(chan string, 1)
+	go func() {
+		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+		answer <- strings.ToLower(strings.TrimSpace(line))
+	}()
+	select {
+	case <-ctx.Done():
+		fmt.Fprintln(os.Stderr)
+		return false, ctx.Err()
+	case a := <-answer:
+		return a == "y" || a == "yes", nil
+	}
 }
 
 // box is the "sandbox" or "scan" word after a download: the file goes into

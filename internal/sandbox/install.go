@@ -64,8 +64,7 @@ func findMsb() (string, bool) {
 	return "", false
 }
 
-// ask prints the one question gett ever asks and reads the answer; tests
-// replace it.
+// ask prints the install question and reads the answer; tests replace it.
 var ask = func(question string) (yes bool) {
 	fmt.Fprint(os.Stderr, question)
 	return readYes(os.Stdin)

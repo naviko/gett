@@ -269,6 +269,7 @@ gett https://example.com/file cookies.txt           cookies from a Netscape cook
 gett https://example.com/file 5m                    stop after 5 minutes; also 30s, 1h30m
 gett https://example.com/file verbose               requests, replies, headers, redirects, retries
 gett https://example.com/file silent                no progress, no notes, errors only
+gett https://example.com/file force                 continue when a check finds a problem
 gett https://example.com/a.zip extract 5m silent    words combine, in any order
 gett https://example.com/tool.tar.gz scan verbose   sandbox commands and scanner output
 ```
@@ -278,7 +279,10 @@ contents and sent to the hosts it names. A timeout covers the whole command;
 a download it stops resumes on the next run. `verbose` prints every request
 and reply with its headers, redirects, retries and resume decisions to
 stderr, with `Authorization` and `Cookie` values hidden. `silent` prints
-nothing but errors.
+nothing but errors. A server whose TLS certificate cannot be verified gets a
+question on a terminal, `download anyway? [y/N]`; `force` shows the problem
+and downloads without asking. Without `force`, when piped or `silent`, there
+is no question and the command ends with exit 60.
 
 `gett` without arguments prints the examples and the defaults. `gett version`
 prints the version. Proxies are read from `HTTP_PROXY`, `HTTPS_PROXY` and
@@ -310,7 +314,7 @@ exit  message                                                  meaning
 47    more than 100 redirects                                  redirect loop
 52    server closed the connection early (example.com)         no or partial response
 56    connection reset (example.com)                           connection dropped by the server or network
-60    TLS certificate problem (example.com): ...               expired, self-signed, or wrong name
+60    TLS certificate problem (example.com): ...               expired, self-signed, or wrong name; `force` downloads anyway
 67    login denied by example.com                              FTP user or password wrong
 130   interrupted                                              Ctrl+C
 ```

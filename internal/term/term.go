@@ -40,6 +40,7 @@ func StdoutTTY() bool {
 	return tty(os.Stdout)
 }
 func StderrTTY() bool { return tty(os.Stderr) }
+func StdinTTY() bool  { return tty(os.Stdin) }
 
 // Sanitize strips every control character, so a server cannot inject
 // terminal escape sequences into a single-line field.

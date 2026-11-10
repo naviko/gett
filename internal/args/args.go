@@ -41,6 +41,7 @@ type Opts struct {
 	ExtractTo  string   // download: where to unpack, "" = beside the file
 	Sandbox    bool     // download: unpack and scan in a microVM, keep it
 	Scan       bool     // download: unpack and scan in a microVM, remove it
+	Force      bool     // download: continue after a check found a problem
 	Paths      []string // transfer: what to share, or where to pull into
 	Items      []string // transfer: numbers like "1" and "2.3"
 	Password   string   // transfer: the word after what is shared, or the one to unlock with
@@ -80,6 +81,12 @@ func Parse(mode Mode, rest []string) (*Opts, error) {
 			} else {
 				o.Scan = true
 			}
+			continue
+		case "force":
+			if mode != Download {
+				return nil, fmt.Errorf("don't know what %q means", a)
+			}
+			o.Force = true
 			continue
 		case "verbose":
 			o.Verbose = true

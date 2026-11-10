@@ -4,6 +4,7 @@ package httpx
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -33,6 +34,7 @@ const maxRedirects = 100
 type Config struct {
 	CookieFile string
 	Retries    bool // retry transient failures (safe for GET)
+	Insecure   bool // do not check TLS certificates
 }
 
 // Transport returns the base transport: HTTP/2, proxy from environment,
@@ -53,7 +55,11 @@ func Transport() *http.Transport {
 
 // NewClient builds the client. Redirects are followed, cookies kept.
 func NewClient(cfg Config) (*http.Client, error) {
-	var rt http.RoundTripper = &verboseTransport{Transport()}
+	t := Transport()
+	if cfg.Insecure {
+		t.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // the user asked for it
+	}
+	var rt http.RoundTripper = &verboseTransport{t}
 	if cfg.Retries {
 		rc := retryablehttp.NewClient()
 		rc.RetryMax = 3

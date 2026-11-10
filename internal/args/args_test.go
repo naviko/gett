@@ -118,3 +118,15 @@ func TestTransferWords(t *testing.T) {
 		t.Fatal("extract still means nothing in ftp mode")
 	}
 }
+
+func TestForce(t *testing.T) {
+	o, err := Parse(Download, []string{"force", "movie.mp4"})
+	if err != nil || !o.Force || o.Name != "movie.mp4" {
+		t.Fatalf("download: %+v, %v", o, err)
+	}
+	for _, m := range []Mode{Send, FTP} {
+		if _, err := Parse(m, []string{"force"}); err == nil {
+			t.Fatalf("mode %d accepted force", m)
+		}
+	}
+}
