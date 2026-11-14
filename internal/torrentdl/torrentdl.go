@@ -209,7 +209,11 @@ func load(ctx context.Context, o Options) (mi *metainfo.MetaInfo, magnet, hash s
 	return mi, "", mi.HashInfoBytes().HexString(), nil
 }
 
-// wait follows the download until every byte is in, reporting progress.
+// wait follows the download until every piece is verified, reporting
+// progress. BytesCompleted also counts bytes that are written but not yet
+// hashed, so it reaches the total while the last pieces are still being
+// checked. Only a verified piece is final: until then the library keeps the
+// file under a ".part" name, and a piece that fails its hash is fetched again.
 func wait(ctx context.Context, t *torrent.Torrent, bar *term.Bar) error {
 	total := t.Length()
 	tick := time.NewTicker(200 * time.Millisecond)
@@ -218,7 +222,7 @@ func wait(ctx context.Context, t *torrent.Torrent, bar *term.Bar) error {
 	for {
 		done := t.BytesCompleted()
 		bar.SetCurrent(done)
-		if done >= total {
+		if done >= total && t.Complete().Bool() {
 			return nil
 		}
 		if term.Verbose && time.Since(last) >= 5*time.Second {
