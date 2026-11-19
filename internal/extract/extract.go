@@ -1,5 +1,6 @@
 // Package extract unpacks archives: zip, 7z, rar, tar in all its wrappings,
-// and single compressed files. The format comes from the file's first bytes.
+// single compressed files, and gett's own .xgett, which runs on most cores
+// (see package xgett). The format comes from the file's first bytes.
 // Nothing is overwritten, no entry can land outside its folder, and the
 // archive itself is kept. Zip entries are unpacked on every core at once;
 // gzip reads ahead on spare cores; the stream formats (tar, 7z, rar, xz,
@@ -16,6 +17,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -24,6 +26,7 @@ import (
 	"gett/internal/download"
 	"gett/internal/errs"
 	"gett/internal/term"
+	"gett/internal/xgett"
 
 	"github.com/bodgit/sevenzip"
 	"github.com/klauspost/compress/zip"
@@ -32,20 +35,32 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// Run unpacks archive. With dest empty the result lands beside the archive,
-// named after it; otherwise the contents land in dest, created if missing. A
-// file that is not an archive is reported and left alone, which is not an
-// error. Anything else that stops the unpacking is an *errs.Archive, except
-// local disk trouble, which is an *errs.Write as everywhere in gett.
-func Run(ctx context.Context, archive, dest string) error {
-	if dest != "" {
-		dest = filepath.Clean(dest)
-	}
+// Run unpacks archive. words are what was typed after it: the folder to
+// unpack into and, for a .xgett that needs one, its key last. Empty words
+// count for nothing. Without a folder the result lands beside the archive,
+// named after it; otherwise the contents land in the folder, created if
+// missing. A file that is not an archive is reported and left alone, which is
+// not an error. Anything else that stops the unpacking is an *errs.Archive,
+// except local disk trouble, which is an *errs.Write as everywhere in gett.
+func Run(ctx context.Context, archive string, words ...string) error {
+	words = slices.DeleteFunc(slices.Clone(words), func(w string) bool { return w == "" })
 	f, err := os.Open(archive)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
+	var head [8]byte
+	n, _ := f.ReadAt(head[:], 0)
+	if xgett.Sniff(head[:n]) {
+		return runXgett(ctx, f, archive, words)
+	}
+	if len(words) > 1 {
+		return &errs.Usage{Msg: fmt.Sprintf("don't know what %q means", words[1])}
+	}
+	dest := ""
+	if len(words) == 1 {
+		dest = filepath.Clean(words[0])
+	}
 	format, _, err := archives.Identify(ctx, archive, f)
 	if errors.Is(err, archives.NoMatch) {
 		term.Info("%s is not an archive, left as is", archive)

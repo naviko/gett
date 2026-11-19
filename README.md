@@ -8,6 +8,7 @@ keep things safe.
 gett URL                      download (http, ftp, torrent, ipfs)
 gett URL extract              download and unpack
 gett extract FILE [DIR]       unpack zip, tar, 7z, rar, gz ...
+gett compress DIR NAME.xgett  pack files and folders into one .xgett file
 gett URL scan                 unpack into a sandbox, scan, report results, dispose of sandbox
 gett URL sandbox              unpack into a sandbox, scan, keep the sandbox: ssh name
 gett ftp upload URL FILE|DIR  upload
@@ -146,13 +147,31 @@ gett extract https://example.com/src.tar.gz              download, unpack into .
 ```
 
 Supported formats: zip, 7z, rar, tar, tar.gz, tar.xz, tar.zst, tar.bz2, gz,
-xz, zst, bz2. The format is detected from the file content. The result is
+xz, zst, bz2, xgett. The format is detected from the file content. The result is
 placed beside the archive in a folder named after it. An archive with a
 single top-level folder is unpacked as that folder. Existing files are not
 overwritten; the new folder is named `src (1)/`. The archive is kept. Entries
 that would be written outside the folder are skipped. Zip archives are
 unpacked on all cores. A file that is not an archive, is encrypted, or is
 damaged is left unchanged.
+
+## Compress (experimental)
+
+```
+gett compress photos/ photos.xgett                      pack a folder
+gett compress photos/ videos/ report.pdf backup.xgett   pack several things into one file
+gett compress photos/ backup.xgett tiger                protect it with the password tiger
+gett extract backup.xgett                               unpack
+gett extract backup.xgett out/                          unpack into out/
+gett extract backup.xgett tiger                         unpack with the password
+gett extract backup.xgett out/ tiger                    folder first, password last
+gett extract report.xgett | less                        one packed file streams when piped
+```
+
+The result is always one `.xgett` file, and only gett opens it. Existing
+files are not overwritten; the new file is named `backup (1).xgett`. Both
+commands end by printing how much smaller or larger the result is and how
+long it took.
 
 ## Sandbox (experimental)
 
@@ -296,6 +315,8 @@ One line per error, with curl's exit codes:
 exit  message                                                  meaning
 2     don't know what "x" means                                a word gett does not understand
 2     game.rar needs a password, left as is                    archive not unpacked; the file is kept
+2     wrong password for backup.xgett, left as is              the last word was not its password
+2     unable to extract backup.xgett, left as is               the archive could not be opened
 2     net trace needs elevated rights                          run with sudo or as Administrator
 3     not a valid URL: x                                       the URL could not be parsed
 5     could not reach proxy: ...                               HTTP_PROXY or HTTPS_PROXY is wrong

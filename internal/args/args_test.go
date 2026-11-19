@@ -130,3 +130,60 @@ func TestForce(t *testing.T) {
 		}
 	}
 }
+
+func TestCompressWords(t *testing.T) {
+	o, err := Parse(Compress, []string{"photos/", "report.pdf", "backup.xgett", "tiger", "verbose", "30s"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(o.Paths) != 2 || o.Paths[0] != "photos/" || o.Paths[1] != "report.pdf" || o.Name != "backup.xgett" || o.Password != "tiger" || !o.Verbose || o.Timeout != 30*time.Second {
+		t.Fatalf("inputs, name, password, words: %+v", o)
+	}
+	o, err = Parse(Compress, []string{"photos/", "backup.xgett"})
+	if err != nil || len(o.Paths) != 1 || o.Name != "backup.xgett" || o.Password != "" {
+		t.Fatalf("no password: %+v %v", o, err)
+	}
+	if _, err := Parse(Compress, []string{"photos/", "tiger"}); err == nil || err.Error() != CompressUsage {
+		t.Fatalf("the .xgett name is required: %v", err)
+	}
+	if _, err := Parse(Compress, nil); err == nil {
+		t.Fatal("nothing at all should fail")
+	}
+
+	// Position decides: before the name everything is something to pack,
+	// even a word gett knows or another .xgett.
+	o, err = Parse(Compress, []string{"old.xgett", "verbose", "5m", "all.XGETT"})
+	if err != nil || len(o.Paths) != 3 || o.Name != "all.XGETT" || o.Verbose || o.Timeout != 0 {
+		t.Fatalf("words before the name are inputs: %+v %v", o, err)
+	}
+	o, err = Parse(Compress, []string{"b.xgett"})
+	if err != nil || len(o.Paths) != 0 || o.Name != "b.xgett" {
+		t.Fatalf("a name alone parses, with nothing to pack: %+v %v", o, err)
+	}
+
+	// After the name any word is the password, whatever it looks like.
+	for _, word := range []string{"a:b", "force", "extract", "scan", "photos/", "README"} {
+		o, err = Parse(Compress, []string{"a", "b.xgett", word})
+		if err != nil || o.Password != word || len(o.Headers) != 0 || o.Extract || o.Scan || o.Force {
+			t.Fatalf("%q after the name is the password: %+v %v", word, o, err)
+		}
+	}
+	if _, err := Parse(Compress, []string{"a", "b.xgett", "tiger", "lion"}); err == nil {
+		t.Fatal("two passwords should fail")
+	}
+}
+
+func TestUnpackWords(t *testing.T) {
+	o, err := Parse(Unpack, []string{"out/", "tiger", "silent", "30s"})
+	if err != nil || len(o.Paths) != 2 || o.Paths[0] != "out/" || o.Paths[1] != "tiger" || !o.Silent || o.Timeout != 30*time.Second {
+		t.Fatalf("folder, key, words: %+v %v", o, err)
+	}
+	o, err = Parse(Unpack, []string{"extract", "a:b", "force"})
+	if err != nil || len(o.Paths) != 3 || o.Extract || o.Force || len(o.Headers) != 0 {
+		t.Fatalf("every bare word is kept as typed: %+v %v", o, err)
+	}
+	o, err = Parse(Unpack, nil)
+	if err != nil || len(o.Paths) != 0 {
+		t.Fatalf("no words: %+v %v", o, err)
+	}
+}

@@ -4,6 +4,7 @@ package args
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -21,7 +22,12 @@ const (
 	Send
 	FTP
 	Transfer
+	Compress
+	Unpack
 )
+
+// CompressUsage is how "gett compress" is typed.
+const CompressUsage = "gett compress FILE|DIR... NAME.xgett [PASSWORD]"
 
 type KV struct{ Key, Value string }
 
@@ -36,15 +42,15 @@ type Opts struct {
 	Timeout    time.Duration
 	Verbose    bool
 	Silent     bool
-	Name       string   // download: output file name
+	Name       string   // download: output file name; compress: the .xgett to write
 	Extract    bool     // download: unpack the saved file
 	ExtractTo  string   // download: where to unpack, "" = beside the file
 	Sandbox    bool     // download: unpack and scan in a microVM, keep it
 	Scan       bool     // download: unpack and scan in a microVM, remove it
 	Force      bool     // download: continue after a check found a problem
-	Paths      []string // transfer: what to share, or where to pull into
+	Paths      []string // transfer: what to share, or where to pull into; compress: what to pack; unpack: the bare words in order
 	Items      []string // transfer: numbers like "1" and "2.3"
-	Password   string   // transfer: the word after what is shared, or the one to unlock with
+	Password   string   // transfer: the word after what is shared, or the one to unlock with; compress: the word after the .xgett
 	Ls         bool     // transfer: list inside an item
 }
 
@@ -58,14 +64,34 @@ var (
 // exception: the word right after "extract" is where to unpack. In Transfer
 // mode a path is something to share or the destination, digits with dots
 // are an item number, and any other bare word is a password.
+//
+// Compress and Unpack go by position instead. In Compress mode everything
+// before the last word ending in .xgett is something to pack, that word is
+// the file to write, and one word after it is the password. In Unpack mode
+// the bare words are kept in the order typed: the folder, then the key. In
+// both, only verbose, silent and a timeout keep their meaning.
 func Parse(mode Mode, rest []string) (*Opts, error) {
 	o := &Opts{Headers: http.Header{}}
+	if mode == Compress {
+		i := len(rest) - 1
+		for i >= 0 && !strings.HasSuffix(strings.ToLower(rest[i]), ".xgett") {
+			i--
+		}
+		if i < 0 {
+			return nil, errors.New(CompressUsage)
+		}
+		o.Paths, o.Name, rest = rest[:i:i], rest[i], rest[i+1:]
+	}
+	bare := mode == Compress || mode == Unpack
 	afterExtract := false
 	for _, a := range rest {
 		dest := afterExtract
 		afterExtract = false
 		switch strings.ToLower(a) {
 		case "extract":
+			if bare {
+				break
+			}
 			if mode != Download && mode != Transfer {
 				return nil, fmt.Errorf("don't know what %q means", a)
 			}
@@ -73,6 +99,9 @@ func Parse(mode Mode, rest []string) (*Opts, error) {
 			afterExtract = true
 			continue
 		case "sandbox", "scan":
+			if bare {
+				break
+			}
 			if mode != Download && mode != Transfer {
 				return nil, fmt.Errorf("don't know what %q means", a)
 			}
@@ -83,6 +112,9 @@ func Parse(mode Mode, rest []string) (*Opts, error) {
 			}
 			continue
 		case "force":
+			if bare {
+				break
+			}
 			if mode != Download {
 				return nil, fmt.Errorf("don't know what %q means", a)
 			}
@@ -97,6 +129,17 @@ func Parse(mode Mode, rest []string) (*Opts, error) {
 		}
 		if d, ok := duration(a); ok {
 			o.Timeout = d
+			continue
+		}
+		if mode == Compress {
+			if o.Password != "" {
+				return nil, fmt.Errorf("two passwords given: %q and %q", o.Password, a)
+			}
+			o.Password = a
+			continue
+		}
+		if mode == Unpack {
+			o.Paths = append(o.Paths, a)
 			continue
 		}
 		if mode == Transfer {

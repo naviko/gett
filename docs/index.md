@@ -34,7 +34,20 @@ gett extract app.log.gz | grep ERROR                  stream a compressed file
 ```
 
 zip, 7z, rar, tar, tar.gz, tar.xz, tar.zst, tar.bz2, gz, xz, zst and bz2.
-The format is detected from the content, so a renamed file opens too.
+The format is detected from the content.
+
+## Pack files into one
+
+```
+gett compress photos/ photos.xgett                    pack a folder into one file
+gett compress photos/ report.pdf backup.xgett         pack several things into one file
+gett compress photos/ backup.xgett tiger              protect it with the password tiger
+gett extract backup.xgett                             unpack
+gett extract backup.xgett out/ tiger                  unpack into out/ with the password
+```
+
+The result is always one `.xgett` file, and only gett opens it. An existing
+file is never overwritten; the new one is named `backup (1).xgett`.
 
 ## Share files with a computer in the same room
 

@@ -1,0 +1,1 @@
+added compress: packs files and folders into one .xgett file, with an optional password

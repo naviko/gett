@@ -28,6 +28,7 @@ import (
 	"gett/internal/term"
 	"gett/internal/torrentdl"
 	"gett/internal/transfer"
+	"gett/internal/xgett"
 
 	"github.com/spf13/cobra"
 )
@@ -58,6 +59,13 @@ Extract
   gett extract game.zip games/                              unpack a local file into games/
   gett extract app.log.gz                                   a .gz or .xz: gives app.log
   gett extract app.log.gz | grep ERROR                      stream a compressed file
+
+Compress (experimental)
+  gett compress photos/ photos.xgett                        pack a folder
+  gett compress photos/ videos/ report.pdf backup.xgett     pack several things into one file
+  gett compress photos/ backup.xgett tiger                  protect it with the password tiger
+  gett extract backup.xgett                                 unpack
+  gett extract backup.xgett out/ tiger                      folder first, password last
 
 Sandbox (experimental)
   gett https://example.com/tool.tar.gz scan                 unpack into a sandbox, scan, report, dispose
@@ -121,28 +129,29 @@ Other examples
   gett https://example.com/file force                       continue when a check finds a problem
   gett https://example.com/a.zip extract 5m silent          several at once
 
-Defaults, nothing to set
-  connections    up to 16 in parallel when the server allows ranges
-  resume         automatic: run the same command again
-  file name      from the server or the URL, extension kept or detected
-  overwrite      never, "name (1).ext" instead
-  redirects      followed, including HTML forwarders; expired links are renewed
-  stdout         download streams to stdout when piped
-  timeout        none; 30s to connect, 30s without data
-  retries        3 with backoff, 429 and 5xx retried
-  proxy          HTTP_PROXY / HTTPS_PROXY / NO_PROXY
-  TLS            verified, a certificate problem asks before downloading; ftp:// uses TLS when offered, ftps:// always
-  ftp            up to 8 connections, resumes, skips files already there
-  transfer       local network only, up to 16 connections, resumes, never overwrites
-  extract        every core for zip, never overwrites, archive kept
-  sandbox        ubuntu, 1 GiB, 2 cpus, internet yes, your machine no
-  net            ping 4 times, trace 30 hops, 3s to connect
-  torrent        stops when complete, never seeds
-  ipfs           public gateways, override with IPFS_GATEWAY=https://a,https://b
-  coin           public explorers, summary on a terminal, raw JSON when piped
-  send method    GET, or POST when a body is given
-  output         summary on a terminal, raw body when piped
-  exit codes     same as curl
+Defaults
+  connections    up to 16 per download when the server supports range requests
+  resume         automatic; run the same command again
+  file name      taken from the server or the URL; a missing extension is detected
+  overwrite      existing files are not overwritten; the new file is saved as "name (1).ext"
+  redirects      followed, including HTML redirects; expired links are refreshed
+  stdout         a download is written to stdout when piped
+  timeout        none overall; 30s to connect, 30s without data
+  retries        3, with backoff; 429 and 5xx responses are retried
+  proxy          read from HTTP_PROXY, HTTPS_PROXY and NO_PROXY
+  TLS            certificates are verified; gett asks before downloading if verification fails
+                 ftp:// uses TLS when the server offers it, ftps:// always
+  ftp            up to 8 connections; partial files are resumed; existing files are skipped
+  transfer       local network only; up to 16 connections; downloads are resumed; existing files are not overwritten
+  extract        zip archives use all cores; existing files are not overwritten; the archive is kept
+  compress       writes one .xgett file; existing files are not overwritten
+  sandbox        Ubuntu, 1 GiB RAM, 2 CPUs; internet access enabled; isolated from the host
+  net            ping sends 4 requests; trace stops at 30 hops; 3s connection timeout
+  torrent        exits when the download completes; does not seed
+  ipfs           public gateways; set IPFS_GATEWAY=https://a,https://b to use others
+  coin           public explorers; summary on a terminal, raw JSON when piped
+  send           GET by default, POST when a body is given; summary on a terminal, raw body when piped
+  exit codes     the same as curl
 
   gett version   print the version
 `
@@ -163,7 +172,8 @@ func main() {
 	root.SetHelpFunc(func(*cobra.Command, []string) { fmt.Printf(help, version) })
 	root.AddCommand(
 		&cobra.Command{Use: "ftp upload URL FILE|DIR | ls URL | rm URL [...]", Args: cobra.MinimumNArgs(1), DisableFlagsInUseLine: true, RunE: runFTP},
-		&cobra.Command{Use: "extract FILE|URL [DIR] [...]", Args: cobra.MinimumNArgs(1), DisableFlagsInUseLine: true, RunE: runExtract},
+		&cobra.Command{Use: "extract FILE|URL [DIR] [PASSWORD] [...]", Args: cobra.MinimumNArgs(1), DisableFlagsInUseLine: true, RunE: runExtract},
+		&cobra.Command{Use: "compress FILE|DIR... NAME.xgett [PASSWORD] [...]", Args: cobra.ArbitraryArgs, DisableFlagsInUseLine: true, RunE: runCompress},
 		&cobra.Command{Use: "transfer [PATH...] [PASSWORD] | [NUMBER...] [DIR] | ls NUMBER [...]", Args: cobra.ArbitraryArgs, DisableFlagsInUseLine: true, RunE: runTransfer},
 		&cobra.Command{Use: "sandbox [FILE|DIR|URL] | rm NAME... | reset", Args: cobra.ArbitraryArgs, DisableFlagsInUseLine: true, RunE: runSandbox},
 		&cobra.Command{Use: "net ip | dns NAME | ping HOST | trace HOST | port HOST PORT | tls HOST | whois NAME | speed", Args: cobra.MinimumNArgs(1), DisableFlagsInUseLine: true, RunE: runNet},
@@ -454,16 +464,27 @@ func runExtract(cmd *cobra.Command, a []string) error {
 	if strings.Contains(a[0], "://") || torrentdl.IsTorrent(a[0]) {
 		return runDownload(cmd, append([]string{a[0], "extract"}, a[1:]...))
 	}
-	// The words after the file parse as they would after "extract" on a
-	// download: the first bare word is the folder, the rest are words.
-	ctx, o, err := setup(cmd, args.Download, append([]string{"extract"}, a[1:]...))
+	// The bare words after the file go by position: the folder, then, for a
+	// .xgett that needs one, its key. What they are is known only once the
+	// file is open, so extract sorts them out.
+	ctx, o, err := setup(cmd, args.Unpack, a[1:])
 	if err != nil {
 		return err
 	}
-	if o.Name != "" {
-		return &errs.Usage{Msg: fmt.Sprintf("don't know what %q means", o.Name)}
+	return extract.Run(ctx, a[0], o.Paths...)
+}
+
+// runCompress handles "gett compress FILE|DIR... NAME.xgett [PASSWORD]".
+func runCompress(cmd *cobra.Command, a []string) error {
+	ctx, o, err := setup(cmd, args.Compress, a)
+	if err != nil {
+		return err
 	}
-	return extract.Run(ctx, a[0], o.ExtractTo)
+	if len(o.Paths) == 0 {
+		return &errs.Usage{Msg: args.CompressUsage}
+	}
+	_, err = xgett.Pack(ctx, o.Paths, o.Name, o.Password)
+	return err
 }
 
 func runCoin(cmd *cobra.Command, a []string) error {
