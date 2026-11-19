@@ -9,6 +9,8 @@ gett URL                      download (http, ftp, torrent, ipfs)
 gett URL extract              download and unpack
 gett extract FILE [DIR]       unpack zip, tar, 7z, rar, gz ...
 gett compress DIR NAME.xgett  pack files and folders into one .xgett file
+gett split FILE [SIZE]        split a file into parts: FILE.001, FILE.002 ...
+gett join FILE.001            join the parts of a split file
 gett URL scan                 unpack into a sandbox, scan, report results, dispose of sandbox
 gett URL sandbox              unpack into a sandbox, scan, keep the sandbox: ssh name
 gett ftp upload URL FILE|DIR  upload
@@ -173,6 +175,27 @@ files are not overwritten; the new file is named `backup (1).xgett`. Both
 commands end by printing how much smaller or larger the result is and how
 long it took.
 
+## Split and join (experimental)
+
+```
+gett split movie.mkv                  split into 1 GB parts: movie.mkv.001, movie.mkv.002 ...
+gett split movie.mkv 700MiB           split into 700 MiB parts
+gett split movie.mkv 4GB usb/         write the parts into usb/
+gett join movie.mkv.001               join the parts into movie.mkv
+gett join movie.mkv.001 out/          join into out/
+gett join backup.tar.gz.aa            join parts made by split on Linux or macOS
+gett join movie.mkv.001 | sha256sum   piped: streams, saves nothing
+```
+
+Sizes are a number and a unit: `KB`, `MB`, `GB` and `TB` are decimal, `KiB`,
+`MiB`, `GiB` and `TiB` are binary. Without a size the parts are 1 GB. Parts
+are plain pieces of the file, so 7-Zip, HJSplit, Total Commander, `cat` and
+`copy /b` can join them, and `gett join` joins parts made by those tools and
+by `split`. The original file and the parts are kept, and existing files are
+not overwritten. `gett join` stops when a part is missing or differs in size
+from the others; `force` joins parts of different sizes. Several parts are
+copied at the same time.
+
 ## Sandbox (experimental)
 
 ```
@@ -317,6 +340,10 @@ exit  message                                                  meaning
 2     game.rar needs a password, left as is                    archive not unpacked; the file is kept
 2     wrong password for backup.xgett, left as is              the last word was not its password
 2     unable to extract backup.xgett, left as is               the archive could not be opened
+2     movie.mkv.003 is missing, nothing joined                 a part of a split file is not there
+2     movie.mkv.003 is not the same size as the other parts    a part is incomplete; `force` joins anyway
+2     notes.txt is not part of a split file                    join found no sequence of parts
+2     1KB parts would make 4700000 files; use a larger size    split refuses more than 9999 parts
 2     net trace needs elevated rights                          run with sudo or as Administrator
 3     not a valid URL: x                                       the URL could not be parsed
 5     could not reach proxy: ...                               HTTP_PROXY or HTTPS_PROXY is wrong

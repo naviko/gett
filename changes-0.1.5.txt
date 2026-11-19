@@ -1,1 +1,2 @@
 added compress: packs files and folders into one .xgett file, with an optional password
+added split and join: parts other tools can join, and joins parts made by other tools

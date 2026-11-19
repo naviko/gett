@@ -173,6 +173,66 @@ func TestCompressWords(t *testing.T) {
 	}
 }
 
+func TestParseSize(t *testing.T) {
+	for word, want := range map[string]int64{
+		"1GB":    1_000_000_000,
+		"1gb":    1_000_000_000,
+		"1Gb":    1_000_000_000,
+		"1GiB":   1 << 30,
+		"1gib":   1 << 30,
+		"25MB":   25_000_000,
+		"700MiB": 700 << 20,
+		"4GB":    4_000_000_000,
+		"4GiB":   4 << 30,
+		"1.5GB":  1_500_000_000,
+		"0.5KiB": 512,
+		"500KB":  500_000,
+		"2TB":    2_000_000_000_000,
+		"1TiB":   1 << 40,
+		"100B":   100,
+	} {
+		if got, ok := ParseSize(word); !ok || got != want {
+			t.Errorf("ParseSize(%q) = %d, %v; want %d", word, got, ok, want)
+		}
+	}
+	for _, word := range []string{"5m", "1g", "1G", "100", "GB", "1 GB", "1GBs", "-1GB", "0GB", "0.0001B", "1GB/", "1e3MB", ""} {
+		if got, ok := ParseSize(word); ok {
+			t.Errorf("ParseSize(%q) = %d, should not be a size", word, got)
+		}
+	}
+}
+
+func TestSplitAndJoinWords(t *testing.T) {
+	o, err := Parse(Split, []string{"700MiB", "usb/", "verbose", "5m"})
+	if err != nil || o.Size != 700<<20 || o.SizeText != "700MiB" || len(o.Paths) != 1 || o.Paths[0] != "usb/" || !o.Verbose || o.Timeout != 5*time.Minute {
+		t.Fatalf("size, folder, words: %+v %v", o, err)
+	}
+	o, err = Parse(Split, []string{"usb/", "1gb"})
+	if err != nil || o.Size != 1_000_000_000 || o.SizeText != "1gb" || len(o.Paths) != 1 {
+		t.Fatalf("the size goes anywhere: %+v %v", o, err)
+	}
+	o, err = Parse(Split, nil)
+	if err != nil || o.Size != 0 || len(o.Paths) != 0 {
+		t.Fatalf("no size leaves it to the default: %+v %v", o, err)
+	}
+	if _, err := Parse(Split, []string{"1GB", "2GB"}); err == nil {
+		t.Fatal("two sizes should fail")
+	}
+	o, err = Parse(Split, []string{"force", "extract"})
+	if err != nil || len(o.Paths) != 2 || o.Force || o.Extract {
+		t.Fatalf("split knows no force: %+v %v", o, err)
+	}
+
+	o, err = Parse(Join, []string{"out/", "force", "silent"})
+	if err != nil || len(o.Paths) != 1 || o.Paths[0] != "out/" || !o.Force || !o.Silent {
+		t.Fatalf("folder and force: %+v %v", o, err)
+	}
+	o, err = Parse(Join, []string{"1GB"})
+	if err != nil || o.Size != 0 || len(o.Paths) != 1 {
+		t.Fatalf("a size means nothing to join: %+v %v", o, err)
+	}
+}
+
 func TestUnpackWords(t *testing.T) {
 	o, err := Parse(Unpack, []string{"out/", "tiger", "silent", "30s"})
 	if err != nil || len(o.Paths) != 2 || o.Paths[0] != "out/" || o.Paths[1] != "tiger" || !o.Silent || o.Timeout != 30*time.Second {

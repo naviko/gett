@@ -6,9 +6,11 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,6 +26,8 @@ const (
 	Transfer
 	Compress
 	Unpack
+	Split
+	Join
 )
 
 // CompressUsage is how "gett compress" is typed.
@@ -52,13 +56,42 @@ type Opts struct {
 	Items      []string // transfer: numbers like "1" and "2.3"
 	Password   string   // transfer: the word after what is shared, or the one to unlock with; compress: the word after the .xgett
 	Ls         bool     // transfer: list inside an item
+	Size       int64    // split: the size of a part in bytes, 0 when none was given
+	SizeText   string   // split: that size as it was typed
 }
 
 var (
 	headerRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]*:(\s.*|[^/\s].*)?$`)
 	methodRe = regexp.MustCompile(`^[A-Z][A-Z-]{2,}$`)
 	itemRe   = regexp.MustCompile(`^\d+(\.\d+)*$`)
+	sizeRe   = regexp.MustCompile(`^(\d+(?:\.\d+)?)([kmgt]i?b|b)$`)
 )
+
+var sizeUnits = map[string]float64{
+	"b":  1,
+	"kb": 1e3, "mb": 1e6, "gb": 1e9, "tb": 1e12,
+	"kib": 1 << 10, "mib": 1 << 20, "gib": 1 << 30, "tib": 1 << 40,
+}
+
+// ParseSize reads a size such as "1GB", "700MiB" or "1.5gb": a number and a
+// unit that ends in B, in any letter case. KB, MB, GB and TB are decimal;
+// KiB, MiB, GiB and TiB are binary. A bare number is not a size, and neither
+// is "5m", which is a timeout.
+func ParseSize(s string) (int64, bool) {
+	m := sizeRe.FindStringSubmatch(strings.ToLower(s))
+	if m == nil {
+		return 0, false
+	}
+	n, err := strconv.ParseFloat(m[1], 64)
+	if err != nil {
+		return 0, false
+	}
+	bytes := math.Round(n * sizeUnits[m[2]])
+	if bytes < 1 || bytes > 1<<62 {
+		return 0, false
+	}
+	return int64(bytes), true
+}
 
 // Parse classifies every argument. Order does not matter, with one
 // exception: the word right after "extract" is where to unpack. In Transfer
@@ -70,6 +103,9 @@ var (
 // the file to write, and one word after it is the password. In Unpack mode
 // the bare words are kept in the order typed: the folder, then the key. In
 // both, only verbose, silent and a timeout keep their meaning.
+//
+// Split and Join also keep their bare words as typed. Split takes a word
+// shaped like a size as the size of a part, and Join knows force.
 func Parse(mode Mode, rest []string) (*Opts, error) {
 	o := &Opts{Headers: http.Header{}}
 	if mode == Compress {
@@ -82,7 +118,7 @@ func Parse(mode Mode, rest []string) (*Opts, error) {
 		}
 		o.Paths, o.Name, rest = rest[:i:i], rest[i], rest[i+1:]
 	}
-	bare := mode == Compress || mode == Unpack
+	bare := mode == Compress || mode == Unpack || mode == Split || mode == Join
 	afterExtract := false
 	for _, a := range rest {
 		dest := afterExtract
@@ -112,6 +148,10 @@ func Parse(mode Mode, rest []string) (*Opts, error) {
 			}
 			continue
 		case "force":
+			if mode == Join {
+				o.Force = true
+				continue
+			}
 			if bare {
 				break
 			}
@@ -138,7 +178,16 @@ func Parse(mode Mode, rest []string) (*Opts, error) {
 			o.Password = a
 			continue
 		}
-		if mode == Unpack {
+		if mode == Split {
+			if n, ok := ParseSize(a); ok {
+				if o.Size != 0 {
+					return nil, fmt.Errorf("two sizes given: %q and %q", o.SizeText, a)
+				}
+				o.Size, o.SizeText = n, a
+				continue
+			}
+		}
+		if mode == Unpack || mode == Split || mode == Join {
 			o.Paths = append(o.Paths, a)
 			continue
 		}

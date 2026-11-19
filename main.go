@@ -25,6 +25,7 @@ import (
 	"gett/internal/netx"
 	"gett/internal/sandbox"
 	"gett/internal/send"
+	"gett/internal/split"
 	"gett/internal/term"
 	"gett/internal/torrentdl"
 	"gett/internal/transfer"
@@ -66,6 +67,11 @@ Compress (experimental)
   gett compress photos/ backup.xgett tiger                  protect it with the password tiger
   gett extract backup.xgett                                 unpack
   gett extract backup.xgett out/ tiger                      folder first, password last
+
+Split and join (experimental)
+  gett split movie.mkv                                      split into 1 GB parts: movie.mkv.001, movie.mkv.002 ...
+  gett split movie.mkv 700MiB usb/                          split into 700 MiB parts, written into usb/
+  gett join movie.mkv.001                                   join the parts into movie.mkv
 
 Sandbox (experimental)
   gett https://example.com/tool.tar.gz scan                 unpack into a sandbox, scan, report, dispose
@@ -145,6 +151,8 @@ Defaults
   transfer       local network only; up to 16 connections; downloads are resumed; existing files are not overwritten
   extract        zip archives use all cores; existing files are not overwritten; the archive is kept
   compress       writes one .xgett file; existing files are not overwritten
+  split          parts of 1GB named FILE.001, FILE.002 ...; the original file is kept
+  join           parts are checked for gaps and size before joining; the parts are kept
   sandbox        Ubuntu, 1 GiB RAM, 2 CPUs; internet access enabled; isolated from the host
   net            ping sends 4 requests; trace stops at 30 hops; 3s connection timeout
   torrent        exits when the download completes; does not seed
@@ -174,6 +182,8 @@ func main() {
 		&cobra.Command{Use: "ftp upload URL FILE|DIR | ls URL | rm URL [...]", Args: cobra.MinimumNArgs(1), DisableFlagsInUseLine: true, RunE: runFTP},
 		&cobra.Command{Use: "extract FILE|URL [DIR] [PASSWORD] [...]", Args: cobra.MinimumNArgs(1), DisableFlagsInUseLine: true, RunE: runExtract},
 		&cobra.Command{Use: "compress FILE|DIR... NAME.xgett [PASSWORD] [...]", Args: cobra.ArbitraryArgs, DisableFlagsInUseLine: true, RunE: runCompress},
+		&cobra.Command{Use: "split FILE [SIZE] [DIR] [...]", Args: cobra.ArbitraryArgs, DisableFlagsInUseLine: true, RunE: runSplit},
+		&cobra.Command{Use: "join PART [DIR] [...]", Args: cobra.ArbitraryArgs, DisableFlagsInUseLine: true, RunE: runJoin},
 		&cobra.Command{Use: "transfer [PATH...] [PASSWORD] | [NUMBER...] [DIR] | ls NUMBER [...]", Args: cobra.ArbitraryArgs, DisableFlagsInUseLine: true, RunE: runTransfer},
 		&cobra.Command{Use: "sandbox [FILE|DIR|URL] | rm NAME... | reset", Args: cobra.ArbitraryArgs, DisableFlagsInUseLine: true, RunE: runSandbox},
 		&cobra.Command{Use: "net ip | dns NAME | ping HOST | trace HOST | port HOST PORT | tls HOST | whois NAME | speed", Args: cobra.MinimumNArgs(1), DisableFlagsInUseLine: true, RunE: runNet},
@@ -485,6 +495,48 @@ func runCompress(cmd *cobra.Command, a []string) error {
 	}
 	_, err = xgett.Pack(ctx, o.Paths, o.Name, o.Password)
 	return err
+}
+
+// runSplit handles "gett split FILE [SIZE] [DIR]".
+func runSplit(cmd *cobra.Command, a []string) error {
+	if len(a) == 0 {
+		return &errs.Usage{Msg: "gett split FILE [SIZE] [DIR]"}
+	}
+	ctx, o, err := setup(cmd, args.Split, a[1:])
+	if err != nil {
+		return err
+	}
+	if len(o.Paths) > 1 {
+		return &errs.Usage{Msg: fmt.Sprintf("don't know what %q means", o.Paths[1])}
+	}
+	dir := ""
+	if len(o.Paths) == 1 {
+		dir = o.Paths[0]
+	}
+	size, text := o.Size, o.SizeText
+	if size == 0 {
+		size, text = split.DefaultSize, split.DefaultText
+	}
+	return split.Split(ctx, a[0], size, text, dir)
+}
+
+// runJoin handles "gett join PART [DIR]".
+func runJoin(cmd *cobra.Command, a []string) error {
+	if len(a) == 0 {
+		return &errs.Usage{Msg: "gett join PART [DIR]"}
+	}
+	ctx, o, err := setup(cmd, args.Join, a[1:])
+	if err != nil {
+		return err
+	}
+	if len(o.Paths) > 1 {
+		return &errs.Usage{Msg: fmt.Sprintf("don't know what %q means", o.Paths[1])}
+	}
+	dir := ""
+	if len(o.Paths) == 1 {
+		dir = o.Paths[0]
+	}
+	return split.Join(ctx, a[0], dir, o.Force)
 }
 
 func runCoin(cmd *cobra.Command, a []string) error {

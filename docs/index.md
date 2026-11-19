@@ -49,6 +49,17 @@ gett extract backup.xgett out/ tiger                  unpack into out/ with the 
 The result is always one `.xgett` file, and only gett opens it. An existing
 file is never overwritten; the new one is named `backup (1).xgett`.
 
+## Split a large file
+
+```
+gett split movie.mkv                                  split into 1 GB parts: movie.mkv.001, movie.mkv.002 ...
+gett split movie.mkv 4GB usb/                         split into 4 GB parts, written into usb/
+gett join movie.mkv.001                               join the parts into movie.mkv
+```
+
+Parts are plain pieces of the file, so 7-Zip, HJSplit and `cat` can join
+them, and `gett join` joins parts made by those tools.
+
 ## Share files with a computer in the same room
 
 ```

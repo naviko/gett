@@ -82,6 +82,15 @@ func Debug(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", a...)
 }
 
+// Took prints how long something took: to a tenth of a second, or to a
+// millisecond when it was shorter than a second.
+func Took(d time.Duration) string {
+	if d < time.Second {
+		return d.Round(time.Millisecond).String()
+	}
+	return d.Round(100 * time.Millisecond).String()
+}
+
 // Progress is a container of bars. A nil-backed Progress is a no-op, which
 // is what you get when stderr is not a terminal or silent mode is on.
 type Progress struct{ p *mpb.Progress }

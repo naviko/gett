@@ -24,6 +24,8 @@ import (
 	"time"
 	"unicode"
 
+	"gett/internal/term"
+
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/text/unicode/norm"
 )
@@ -388,20 +390,11 @@ func Change(from, to int64) string {
 	return fmt.Sprintf("%d%% larger", pct(to-from))
 }
 
-// Took prints a duration to a tenth of a second, or to a millisecond when it
-// was shorter than a second.
-func Took(d time.Duration) string {
-	if d < time.Second {
-		return d.Round(time.Millisecond).String()
-	}
-	return d.Round(100 * time.Millisecond).String()
-}
-
 // Tail ends a finish line with how the size changed and how long it took.
 func Tail(from, to int64, d time.Duration) string {
 	s := ""
 	if c := Change(from, to); c != "" {
 		s = ", " + c
 	}
-	return s + ", in " + Took(d)
+	return s + ", in " + term.Took(d)
 }

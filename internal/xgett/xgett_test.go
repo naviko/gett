@@ -542,7 +542,7 @@ func TestFinishLine(t *testing.T) {
 		45 * time.Millisecond:    "45ms",
 		400 * time.Microsecond:   "0s",
 	} {
-		if got := Took(d); got != want {
+		if got := term.Took(d); got != want {
 			t.Errorf("Took(%v) = %q, want %q", d, got, want)
 		}
 	}
