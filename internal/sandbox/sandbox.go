@@ -391,7 +391,7 @@ func List(ctx context.Context, w io.Writer) error {
 		return &errs.Sandbox{Msg: "could not read the sandbox list (" + term.Sanitize(err.Error()) + ")"}
 	}
 	if len(rows) == 0 {
-		term.Info("no sandboxes")
+		term.Info("no sandboxes; create one with: gett sandbox FILE, or gett URL sandbox")
 		return nil
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
